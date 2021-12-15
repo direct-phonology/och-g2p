@@ -1,0 +1,90 @@
+title: Grapheme-to-Phoneme Conversion for Old Chinese
+description: |
+  This project applies [Baxter and Sagart's (2014)](https://ocbaxtersagart.lsait.lsa.umich.edu/) reconstruction of Old Chinese phonology to the pronounciations given in the [_Jingdian Shiwen_](https://en.wikipedia.org/wiki/Jingdian_Shiwen) in order to build a model for converting Old Chinese graphemes-in-context into phonemes.
+
+  By linking the Middle Chinese _fanqie_ pronounciations to Old Chinese equivalents using Baxter and Sagart's system, we automatically annotate training data for the model, which disambiguates polyphonic characters based on context.
+  
+  Early Chinese text used is from the [Kanseki Repository](https://www.kanripo.org/text/KR1g0003/) and is licensed CC-BY-SA 4.0.
+
+vars:
+  version: 0.0.1
+
+directories:
+- scripts
+- assets
+- training
+- configs
+- corpus
+- packages
+
+assets:
+  - dest: assets/jdsw
+    git:
+      repo: https://github.com/kanripo/KR1g0003
+      branch: master
+      path: ""
+    description: Text of the _Jingdian Shiwen_, in emacs org-mode format
+
+  - dest: assets/baxter-sagart.xlsx
+    url: https://ocbaxtersagart.lsait.lsa.umich.edu/OCNR%20errata%202020-10-20_LS_WB_final.xlsx
+    checksum: 0383efc957ca862111651c5538cdd156
+    description: Baxter and Sagart's 2014 reconstruction of Old Chinese phonology, in tabular format
+
+workflows:
+  all:
+    - install
+    - parse
+    - annotate
+    - preprocess
+    - train
+    - evaluate
+    - package
+
+  setup:
+    - install
+    - parse
+    - annotate
+    - preprocess
+
+  tune:
+    - train
+    - evaluate
+
+commands:
+  - name: install
+    help: Install dependencies
+    script:
+      - pip install -r requirements.txt
+
+  - name: parse
+    help: Generate data used for annotation
+    script:
+      - python scripts/parse.py
+    outputs:
+      - assets/ # one file for each annotated text in the jdsw?
+
+  - name: annotate
+    help: Automatically annotate training data
+    script:
+      - python scripts/annotate.py
+
+  - name: preprocess
+    help: Convert training data into spaCy's format
+    script:
+      - python -m spacy convert
+
+  - name: train
+    help: Train a grapheme-to-phoneme conversion model
+    script:
+      - python -m spacy train configs/config.cfg
+    outputs:
+      - training/model-best
+
+  - name: evaluate
+    help: Test the model's performance
+    script:
+      - python -m spacy evaluate training/model-best corpus/test_annotated.spacy --output metrics/model.json
+
+  - name: package
+    help: Package the model so it can be installed
+    

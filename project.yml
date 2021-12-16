@@ -18,17 +18,27 @@ directories:
 - packages
 
 assets:
-  - dest: assets/jdsw
+  - dest: assets/jdsw-org
     git:
       repo: https://github.com/kanripo/KR1g0003
       branch: master
       path: ""
-    description: Text of the _Jingdian Shiwen_, in emacs org-mode format
+    description: Text of the _Jingdian Shiwen_ by Lu Deming, from Kanripo
+
+  - dest: assets/kr-norm.tsv
+    url: https://raw.githubusercontent.com/kanripo/KR-Gaiji/master/charlist.org.txt
+    checksum: 6cb4e8c916519b8463f2eaf86a3df691
+    description: Normalization table for special entities in Kanripo
+
+  - dest: assets/kr-unicode.tsv
+    url: https://raw.githubusercontent.com/kr-shadow/KR1/master/gaiji.txt
+    checksum: bcdf6c7912a5bd3c52577fa9c5163c09
+    description: Unicode conversion table for special entities in Kanripo
 
   - dest: assets/baxter-sagart.xlsx
     url: https://ocbaxtersagart.lsait.lsa.umich.edu/OCNR%20errata%202020-10-20_LS_WB_final.xlsx
     checksum: 0383efc957ca862111651c5538cdd156
-    description: Baxter and Sagart's 2014 reconstruction of Old Chinese phonology, in tabular format
+    description: Baxter and Sagart's 2014 reconstruction of Old Chinese phonology
 
 workflows:
   all:
@@ -59,9 +69,13 @@ commands:
   - name: parse
     help: Generate data used for annotation
     script:
-      - python scripts/parse.py
+      - python scripts/parse.py assets/jdsw-org assets/jdsw-txt assets/jdsw-anno
+    deps:
+      - assets/jdsw-org
+      - assets/kr-gaiji.org.txt
     outputs:
-      - assets/ # one file for each annotated text in the jdsw?
+      - assets/jdsw-txt
+      - assets/jdsw-anno
 
   - name: annotate
     help: Automatically annotate training data

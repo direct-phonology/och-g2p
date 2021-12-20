@@ -72,7 +72,8 @@ commands:
       - python scripts/parse.py assets/jdsw-org assets/jdsw-txt assets/jdsw-anno
     deps:
       - assets/jdsw-org
-      - assets/kr-gaiji.org.txt
+      - assets/kr-norm.tsv
+      - assets/kr-unicode.tsv
     outputs:
       - assets/jdsw-txt
       - assets/jdsw-anno

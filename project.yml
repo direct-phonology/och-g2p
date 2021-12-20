@@ -36,8 +36,8 @@ assets:
     description: Unicode conversion table for special entities in Kanripo
 
   - dest: assets/baxter-sagart.xlsx
-    url: https://ocbaxtersagart.lsait.lsa.umich.edu/OCNR%20errata%202020-10-20_LS_WB_final.xlsx
-    checksum: 0383efc957ca862111651c5538cdd156
+    url: https://ocbaxtersagart.lsait.lsa.umich.edu/BaxterSagartOC2015-10-13.xlsx
+    checksum: df7c6c5b7a227f19c0d3c32a662d05d4
     description: Baxter and Sagart's 2014 reconstruction of Old Chinese phonology
 
 workflows:

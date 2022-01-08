@@ -4,18 +4,19 @@ description: |
 
   By linking the Middle Chinese _fanqie_ pronounciations to Old Chinese equivalents using Baxter and Sagart's system, we automatically annotate training data for the model, which disambiguates polyphonic characters based on context.
   
-  Early Chinese text used is from the [Kanseki Repository](https://www.kanripo.org/text/KR1g0003/) and is licensed CC-BY-SA 4.0.
+  Chinese text used is from the [Kanseki Repository](https://www.kanripo.org/text/KR1g0003/) and is licensed CC-BY-SA 4.0.
 
 vars:
   version: 0.0.1
 
 directories:
-- scripts
 - assets
-- training
 - configs
 - corpus
+- metrics
 - packages
+- scripts
+- training
 
 assets:
   - dest: assets/jdsw-org
@@ -25,11 +26,6 @@ assets:
       path: ""
     description: Text of the _Jingdian Shiwen_ by Lu Deming, from Kanripo
 
-  - dest: assets/kr-norm.tsv
-    url: https://raw.githubusercontent.com/kanripo/KR-Gaiji/master/charlist.org.txt
-    checksum: 6cb4e8c916519b8463f2eaf86a3df691
-    description: Normalization table for special entities in Kanripo
-
   - dest: assets/kr-unicode.tsv
     url: https://raw.githubusercontent.com/kr-shadow/KR1/master/gaiji.txt
     checksum: bcdf6c7912a5bd3c52577fa9c5163c09
@@ -38,23 +34,20 @@ assets:
   - dest: assets/baxter-sagart.xlsx
     url: https://ocbaxtersagart.lsait.lsa.umich.edu/BaxterSagartOC2015-10-13.xlsx
     checksum: df7c6c5b7a227f19c0d3c32a662d05d4
-    description: Baxter and Sagart's 2014 reconstruction of Old Chinese phonology
+    description: Baxter and Sagart's (2014) reconstruction of Old Chinese phonology
 
 workflows:
   all:
     - install
     - parse
     - annotate
-    - preprocess
     - train
     - evaluate
     - package
 
-  setup:
-    - install
+  prep:
     - parse
     - annotate
-    - preprocess
 
   tune:
     - train
@@ -69,24 +62,22 @@ commands:
   - name: parse
     help: Generate data used for annotation
     script:
-      - python scripts/parse.py assets/jdsw-org assets/jdsw-txt assets/jdsw-anno
+      - python scripts/parse.py assets/jdsw-org assets/jdsw-txt assets/kr-unicode.tsv
     deps:
       - assets/jdsw-org
-      - assets/kr-norm.tsv
       - assets/kr-unicode.tsv
     outputs:
       - assets/jdsw-txt
-      - assets/jdsw-anno
 
   - name: annotate
-    help: Automatically annotate training data
+    help: Generate training data
     script:
       - python scripts/annotate.py
 
-  - name: preprocess
+  - name: convert
     help: Convert training data into spaCy's format
     script:
-      - python -m spacy convert
+      - python scripts/convert.py
 
   - name: train
     help: Train a grapheme-to-phoneme conversion model
@@ -102,4 +93,6 @@ commands:
 
   - name: package
     help: Package the model so it can be installed
+    script:
+      - python -m spacy package
     

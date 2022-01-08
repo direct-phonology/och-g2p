@@ -21,6 +21,7 @@ BLACKLIST = [
 MODE_HEADER = re.compile(r"# -\*- mode: .+; -\*-\n")
 META_HEADER = re.compile(r"#\+\w+: .+\n")
 LINE_BREAK = re.compile(r"<pb:(?:.+)>¶\n")
+ANNOTATION = re.compile(r"\((.+?)\)")
 
 # fmt: off
 KanripoEntity = re.compile(r"""
@@ -31,27 +32,6 @@ KanripoEntity = re.compile(r"""
     )
 """, re.VERBOSE)
 # fmt: on
-
-# fmt: off
-TextWithAnno = re.compile(r"""
-    (?P<text>.+?)   # text preceding an annotation
-    \(              # opening parenthesis
-    (?P<anno>.+?)   # annotation text
-    \)              # closing parenthesis
-""", re.VERBOSE)
-# fmt: on
-
-
-def split_text_anno(match: re.Match) -> str:
-    """Split text preceding an annotation up by character."""
-    return "".join(
-        [
-            "\t_\n".join(list(match.group("text"))),
-            "\t",
-            match.group("anno"),
-            "\n",
-        ]
-    )
 
 
 def krp_entity_unicode(table: pd.DataFrame, match: re.Match) -> str:
@@ -81,18 +61,39 @@ def clean_text(text: str, to_unicode: Callable[[re.Match], str]) -> str:
     text = text.replace("¶", "")
     text = "".join(text.strip().splitlines())
 
-    # some annotations were split across lines; we need to recombine them
+    # some annotations were split across lines; we need to recombine them.
+    # indicated by two consecutive annotations with no text between them
     text = text.replace(")(", "")
 
     # remove all remaining whitespace
     text = "".join(text.split())
 
+    # remove line breaks within annotations, indicated by "/"
+    text = text.replace("/", "")
+
     return text
 
 
 def split_text(text: str) -> str:
-    """Reformat a text into a CoNLL-U-like format."""
-    return TextWithAnno.sub(split_text_anno, text)
+    """Reformat a text into a CoNLL-like format."""
+
+    # split text by annotations; alternating char sequence with annotation
+    chunks = ANNOTATION.split(text)
+    chars, annos = chunks[::2], chunks[1::2]
+
+    # all characters in sequence correspond to "_" except last, which matches
+    # the annotation. each character on a new line, separated by tab
+    fmt_chunks = zip(
+        ["\t_\n".join(char) for char in chars],
+        ["\t{}\n".format(anno) for anno in annos],
+    )
+    output = "".join(["".join(chunk) for chunk in fmt_chunks])
+
+    # handle case where there's extra text after the last annotation
+    if len(chars) > len(annos):
+        output += "".join([f"{char}\t_\n" for char in chars[-1]])
+
+    return output
 
 
 def parse(src_dir: Path, txt_dir: Path, unicode_table: Path) -> None:
@@ -121,7 +122,7 @@ def parse(src_dir: Path, txt_dir: Path, unicode_table: Path) -> None:
         # read the file and clean it
         text = clean_text(file.read_text(), to_unicode)
 
-        # reformat conll-u style
+        # reformat conll-style
         text = split_text(text)
 
         # save the text into the raw text folder

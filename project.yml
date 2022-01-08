@@ -45,10 +45,6 @@ workflows:
     - evaluate
     - package
 
-  prep:
-    - parse
-    - annotate
-
   tune:
     - train
     - evaluate

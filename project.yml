@@ -56,7 +56,7 @@ commands:
       - pip install -r requirements.txt
 
   - name: parse
-    help: Generate data used for annotation
+    help: Reformat data used for annotation
     script:
       - python scripts/parse.py assets/jdsw-org assets/jdsw-txt assets/kr-unicode.tsv
     deps:
@@ -68,12 +68,21 @@ commands:
   - name: annotate
     help: Generate training data
     script:
-      - python scripts/annotate.py
+      - python scripts/annotate.py assets/jdsw-txt assets/jdsw-oc assets/baxter-sagart.xlsx
+    deps:
+      - assets/jdsw-txt
+    outputs:
+      - assets/jdsw-oc
 
   - name: convert
     help: Convert training data into spaCy's format
     script:
-      - python scripts/convert.py
+      - python scripts/convert.py assets/jdsw-oc corpus/
+    deps:
+      - assets/jdsw-oc
+    outputs:
+      - corpus/train.spacy
+      - corpus/dev.spacy
 
   - name: train
     help: Train a grapheme-to-phoneme conversion model

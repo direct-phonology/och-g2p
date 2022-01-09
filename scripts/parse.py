@@ -9,13 +9,13 @@ import typer
 
 
 # texts we don't care about using: paratextual material, notes, etc.
-BLACKLIST = [
+BLACKLIST = (
     "KR1g0003_000",  # introduction
     "KR1g0003_001",  # 序録
     "KR1g0003_031",  # notes
     "KR1g0003_032",  # notes
     "KR1g0003_033",  # notes
-]
+)
 
 # artifacts in kanseki repository text
 MODE_HEADER = re.compile(r"# -\*- mode: .+; -\*-\n")
@@ -96,24 +96,24 @@ def split_text(text: str) -> str:
     return output
 
 
-def parse(src_dir: Path, txt_dir: Path, unicode_table: Path) -> None:
+def parse(in_dir: Path, out_dir: Path, unicode_table: Path) -> None:
     """Transform the Jingdian Shiwen text into raw text and annotations."""
 
     # read unicode conversion table
     unicode_table = pd.read_csv(
-        "assets/kr-unicode.tsv",
+        unicode_table,
         sep="\t",
         names=["form", "unicode"],
     )
     to_unicode = lambda entity: krp_entity_unicode(unicode_table, entity)
 
     # clean out destination directory
-    txt_dir.mkdir(exist_ok=True)
-    for file in txt_dir.glob("*.txt"):
+    out_dir.mkdir(exist_ok=True)
+    for file in out_dir.glob("*.txt"):
         file.unlink()
 
     # process source text
-    for file in sorted(list(src_dir.glob("*.txt"))):
+    for file in sorted(list(in_dir.glob("*.txt"))):
 
         # ignore blacklisted material
         if any([file.stem in name for name in BLACKLIST]):
@@ -125,8 +125,8 @@ def parse(src_dir: Path, txt_dir: Path, unicode_table: Path) -> None:
         # reformat conll-style
         text = split_text(text)
 
-        # save the text into the raw text folder
-        output = txt_dir / f"{file.stem}.txt"
+        # save the text into the output folder
+        output = out_dir / f"{file.stem}.txt"
         output.open(mode="w").write(text)
 
 

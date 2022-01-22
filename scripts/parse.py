@@ -6,7 +6,7 @@ from typing import Callable
 
 import pandas as pd
 import typer
-
+from tqdm import tqdm
 
 # texts we don't care about using: paratextual material, notes, etc.
 BLACKLIST = (
@@ -113,7 +113,7 @@ def parse(in_dir: Path, out_dir: Path, unicode_table: Path) -> None:
         file.unlink()
 
     # process source text
-    for file in sorted(list(in_dir.glob("*.txt"))):
+    for file in tqdm(sorted(list(in_dir.glob("*.txt")))):
 
         # ignore blacklisted material
         if any([file.stem in name for name in BLACKLIST]):

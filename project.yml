@@ -26,12 +26,22 @@ assets:
       path: ""
     description: Text of the _Jingdian Shiwen_ by Lu Deming, from Kanripo
 
+  - dest: assets/kr-norm.tsv
+    url: https://raw.githubusercontent.com/kanripo/KR-Gaiji/master/charlist.org.txt
+    checksum: 6cb4e8c916519b8463f2eaf86a3df691
+    description: Normalization table for special entities in Kanripo
+
   - dest: assets/kr-unicode.tsv
     url: https://raw.githubusercontent.com/kr-shadow/KR1/master/gaiji.txt
     checksum: bcdf6c7912a5bd3c52577fa9c5163c09
     description: Unicode conversion table for special entities in Kanripo
 
-  - dest: assets/baxter-sagart.xlsx
+  - dest: assets/sbgy.xml
+    url: https://raw.githubusercontent.com/cjkvi/cjkvi-dict/master/sbgy.xml
+    checksum: ff02f0daca3aefc8efc3dfc3b7edabd2
+    description: XML version of the Song Ben Guang Yun rhyme dictionary
+
+  - dest: assets/baxter-sagart-oc.xlsx
     url: https://ocbaxtersagart.lsait.lsa.umich.edu/BaxterSagartOC2015-10-13.xlsx
     checksum: df7c6c5b7a227f19c0d3c32a662d05d4
     description: Baxter and Sagart's (2014) reconstruction of Old Chinese phonology
@@ -68,10 +78,13 @@ commands:
   - name: annotate
     help: Generate training data
     script:
-      - python scripts/annotate.py assets/jdsw-txt assets/jdsw-oc assets/baxter-sagart.xlsx
+      - python scripts/annotate.py assets/jdsw-txt assets/jdsw-mc assets/jdsw-oc assets/baxter-sbgy-mc.xlsx assets/baxter-sagart-oc.xlsx
     deps:
       - assets/jdsw-txt
+      - assets/baxter-sbgy-mc.xlsx
+      - assets/baxter-sagart-oc.xlsx
     outputs:
+      - assets/jdsw-mc
       - assets/jdsw-oc
 
   - name: convert

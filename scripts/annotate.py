@@ -5,13 +5,14 @@ from pathlib import Path
 
 import pandas as pd
 import typer
+from tqdm import tqdm
 
 # fmt: off
 ANNOTATION = re.compile(r"""
     ^
     (?P<char>.)             # character being annotated
     \t
-    (?P<anno>[^_]+?)       # annotation
+    (?P<anno>[^_]+?)        # annotation
     $
 """, re.VERBOSE | re.MULTILINE)
 
@@ -19,8 +20,8 @@ FANQIE = re.compile(r"""
     ^
     (?P<char>.)             # character being annotated
     \t
-    (?P<A>[^_])             # fanqie A
-    (?P<B>[^_])             # fanqie B
+    (?P<initial>[^_])       # initial/onset
+    (?P<rime>[^_])          # rime/tone
     反
     $
 """, re.VERBOSE | re.MULTILINE)
@@ -35,6 +36,8 @@ DIRECT = re.compile(r"""
 """, re.VERBOSE | re.MULTILINE)
 # fmt: on
 
+# case where there's no annotation yet
+EMPTY_ANNO = re.compile(r"^(.)\t_$", re.MULTILINE)
 
 # types of annotations we care about
 WHITELIST = (FANQIE, DIRECT)
@@ -50,31 +53,114 @@ def filter_annotation(annotation: re.Match) -> str:
     return annotation.group(0)
 
 
-def annotate(in_dir: Path, out_dir: Path, bs_table: Path) -> None:
+def annotation_to_mc(annotation: re.Match, mc_table: pd.DataFrame) -> str:
+    """Convert annotations into Middle Chinese readings."""
+
+    # fanqie annotation: fetch initial and rime, combine, then choose the
+    # reading for the annotated character that matches the combination
+    fanqie = FANQIE.match(annotation.group(0))
+    if fanqie:
+        initial = mc_table[mc_table["zi"] == fanqie.group("initial")]
+        rime = mc_table[mc_table["zi"] == fanqie.group("rime")]
+
+        if initial.empty:
+            typer.echo(f"No MC reading for {fanqie.group('initial')} (initial)")
+            return f"{fanqie.group('char')}\t_"
+        if rime.empty:
+            typer.echo(f"No MC reading for {fanqie.group('rime')} (rime)")
+            return f"{fanqie.group('char')}\t_"
+
+        reading = "".join(
+            (initial["MCInitial"].iloc[0], rime["MCfinal"].iloc[0])
+        ).replace("-", "")
+        return f"{fanqie.group('char')}\t{reading}"
+
+    # direct "sounds like" annotation: fetch the reading directly, then choose
+    # the reading for the annotated character that matches it
+    direct = DIRECT.match(annotation.group(0))
+    if direct:
+        match = mc_table[mc_table["zi"] == direct.group("anno")]
+
+        if match.empty:
+            typer.echo(f"No MC reading for {direct.group('anno')} (direct)")
+            return f"{direct.group('char')}\t_"
+        if len(match) > 1:
+            typer.echo(f"Character {direct.group('char')} is polyphonic")
+            return f"{direct.group('char')}\t_"
+
+        reading = match["MC"].iloc[0]
+        return f"{direct.group('char')}\t{reading}"
+
+    # empty annotations: see if the character is monophonic, and if so, just
+    # use the reading for that character
+    monophone = EMPTY_ANNO.match(annotation.group(0))
+    if monophone:
+        match = mc_table[mc_table["zi"] == monophone.group(1)]
+
+        if match.empty or len(match) > 1:
+            return f"{monophone.group(1)}\t_"
+
+        reading = match["MC"].iloc[0]
+        return f"{monophone.group(1)}\t{reading}"
+
+    # shouldn't get here
+    raise UserWarning(f"Bad annotation format: {annotation.group(0)}")
+
+
+def mc_to_oc(char: re.Match, oc_table: pd.DataFrame) -> str:
+    """Convert a Middle Chinese reading into an Old Chinese reading."""
+    return char.group(0)
+
+
+def annotate(
+    in_dir: Path, mc_dir: Path, oc_dir: Path, mc_table_path: Path, oc_table_path: Path
+) -> None:
     """Convert the Jingdian Shiwen annotations into Old Chinese readings."""
 
-    # read baxter-sagart reconstruction table
-    bs = pd.read_excel(bs_table)
+    # read baxter's song ben guang yun middle chinese table
+    mc_table = pd.read_excel(
+        mc_table_path, usecols=["zi", "MC", "MCInitial", "MCfinal"]
+    ).drop_duplicates()
+    _annotation_to_mc = lambda char: annotation_to_mc(char, mc_table)
 
-    # clean out destination directory
-    out_dir.mkdir(exist_ok=True)
-    for file in out_dir.glob("*.txt"):
-        file.unlink()
+    # read baxter & sagart's old chinese table
+    oc_table = pd.read_excel(
+        oc_table_path, usecols=["zi", "MC", "OC"]
+    ).drop_duplicates()
+    _mc_to_oc = lambda char: mc_to_oc(char, oc_table)
 
-    # process conll-style annotations
-    for file in sorted(list(in_dir.glob("*.txt"))):
+    # clean out destination directories
+    for loc in [mc_dir, oc_dir]:
+        loc.mkdir(exist_ok=True)
+        for file in loc.glob("*.txt"):
+            file.unlink()
+
+    # add middle chinese readings for as many characters as possible
+    typer.echo("Processing middle chinese annotations...")
+    for file in tqdm(sorted(list(in_dir.glob("*.txt")))):
 
         # read the file and strip annotations we can't convert
         text = ANNOTATION.sub(filter_annotation, file.read_text())
 
         # convert annotations into middle chinese readings
+        text = ANNOTATION.sub(_annotation_to_mc, text)
 
-        # add middle chinese readings from baxter/schuessler for non-polyphones
-
-        # convert all readings from middle chinese into old chinese
+        # add middle chinese readings for any remaining non-polyphones
+        text = EMPTY_ANNO.sub(_annotation_to_mc, text)
 
         # save the text into the output folder
-        output = out_dir / f"{file.stem}.txt"
+        output = mc_dir / f"{file.stem}.txt"
+        output.open(mode="w").write(text)
+
+    # process middle chinese readings into old chinese readings
+    typer.echo("Converting to old chinese annotations...")
+    for file in tqdm(sorted(list(mc_dir.glob("*.txt")))):
+
+        # add middle chinese readings for any remaining non-polyphones
+        text = EMPTY_ANNO.sub(_mc_to_oc, file.read_text())
+
+        # save the text into the output folder
+        output = oc_dir / f"{file.stem}.txt"
         output.open(mode="w").write(text)
 
 

@@ -24,7 +24,7 @@ Commands are only re-run if their inputs have changed.
 | Command | Description |
 | --- | --- |
 | `install` | Install dependencies |
-| `parse` | Generate data used for annotation |
+| `parse` | Reformat data used for annotation |
 | `annotate` | Generate training data |
 | `convert` | Convert training data into spaCy's format |
 | `train` | Train a grapheme-to-phoneme conversion model |
@@ -41,7 +41,6 @@ inputs have changed.
 | Workflow | Steps |
 | --- | --- |
 | `all` | `install` &rarr; `parse` &rarr; `annotate` &rarr; `train` &rarr; `evaluate` &rarr; `package` |
-| `prep` | `parse` &rarr; `annotate` |
 | `tune` | `train` &rarr; `evaluate` |
 
 ### 🗂 Assets
@@ -53,7 +52,9 @@ in the project directory.
 | File | Source | Description |
 | --- | --- | --- |
 | `assets/jdsw-org` | Git | Text of the _Jingdian Shiwen_ by Lu Deming, from Kanripo |
+| `assets/kr-norm.tsv` | URL | Normalization table for special entities in Kanripo |
 | `assets/kr-unicode.tsv` | URL | Unicode conversion table for special entities in Kanripo |
-| `assets/baxter-sagart.xlsx` | URL | Baxter and Sagart's (2014) reconstruction of Old Chinese phonology |
+| `assets/sbgy.xml` | URL | XML version of the Song Ben Guang Yun rhyme dictionary |
+| `assets/baxter-sagart-oc.xlsx` | URL | Baxter and Sagart's (2014) reconstruction of Old Chinese phonology |
 
 <!-- SPACY PROJECT: AUTO-GENERATED DOCS END (do not remove) -->

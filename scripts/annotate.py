@@ -2,6 +2,7 @@
 
 import re
 from pathlib import Path
+from collections import Counter
 
 import pandas as pd
 import typer
@@ -34,6 +35,11 @@ DIRECT = re.compile(r"""
     (?P<anno>[^_])          # sounds "the same as" this character
     $
 """, re.VERBOSE | re.MULTILINE)
+
+MULTI = re.compile(r"""
+    ^
+    $
+""", re.VERBOSE | re.MULTILINE)
 # fmt: on
 
 # case where there's no annotation yet
@@ -41,6 +47,16 @@ EMPTY_ANNO = re.compile(r"^(.)\t_$", re.MULTILINE)
 
 # types of annotations we care about
 WHITELIST = (FANQIE, DIRECT)
+
+# track statistics for analysis
+STATS = {
+    "total": 0,
+    "annotated_total": 0,
+    "missing_total": 0,
+    "initially_empty": 0,
+    "no_reading": Counter(),
+    "polyphonic": Counter(),
+}
 
 
 def filter_annotation(annotation: re.Match) -> str:
@@ -56,6 +72,8 @@ def filter_annotation(annotation: re.Match) -> str:
 def annotation_to_mc(annotation: re.Match, mc_table: pd.DataFrame) -> str:
     """Convert annotations into Middle Chinese readings."""
 
+    STATS["total"] += 1
+
     # fanqie annotation: fetch initial and rime, combine, then choose the
     # reading for the annotated character that matches the combination
     fanqie = FANQIE.match(annotation.group(0))
@@ -64,15 +82,23 @@ def annotation_to_mc(annotation: re.Match, mc_table: pd.DataFrame) -> str:
         rime = mc_table[mc_table["zi"] == fanqie.group("rime")]
 
         if initial.empty:
-            typer.echo(f"No MC reading for {fanqie.group('initial')} (initial)")
+            # typer.echo(f"No MC reading for {fanqie.group('initial')} (initial)")
+            STATS["missing_total"] += 1
+            STATS["no_reading"][fanqie.group("initial")] += 1
             return f"{fanqie.group('char')}\t_"
+
         if rime.empty:
-            typer.echo(f"No MC reading for {fanqie.group('rime')} (rime)")
+            # typer.echo(f"No MC reading for {fanqie.group('rime')} (rime)")
+            STATS["missing_total"] += 1
+            STATS["no_reading"][fanqie.group("rime")] += 1
             return f"{fanqie.group('char')}\t_"
 
         reading = "".join(
             (initial["MCInitial"].iloc[0], rime["MCfinal"].iloc[0])
         ).replace("-", "")
+
+        STATS["annotated_total"] += 1
+
         return f"{fanqie.group('char')}\t{reading}"
 
     # direct "sounds like" annotation: fetch the reading directly, then choose
@@ -82,25 +108,44 @@ def annotation_to_mc(annotation: re.Match, mc_table: pd.DataFrame) -> str:
         match = mc_table[mc_table["zi"] == direct.group("anno")]
 
         if match.empty:
-            typer.echo(f"No MC reading for {direct.group('anno')} (direct)")
+            # typer.echo(f"No MC reading for {direct.group('anno')} (direct)")
+            STATS["missing_total"] += 1
+            STATS["no_reading"][direct.group("anno")] += 1
             return f"{direct.group('char')}\t_"
+
         if len(match) > 1:
-            typer.echo(f"Character {direct.group('char')} is polyphonic")
+            # typer.echo(f"Character {direct.group('anno')} is polyphonic")
+            STATS["missing_total"] += 1
+            STATS["polyphonic"][direct.group("anno")] += 1
             return f"{direct.group('char')}\t_"
 
         reading = match["MC"].iloc[0]
+
+        STATS["annotated_total"] += 1
+
         return f"{direct.group('char')}\t{reading}"
 
     # empty annotations: see if the character is monophonic, and if so, just
     # use the reading for that character
     monophone = EMPTY_ANNO.match(annotation.group(0))
     if monophone:
+        STATS["initially_empty"] += 1
         match = mc_table[mc_table["zi"] == monophone.group(1)]
 
-        if match.empty or len(match) > 1:
+        if match.empty:
+            STATS["missing_total"] += 1
+            STATS["no_reading"][monophone.group(1)] += 1
+            return f"{monophone.group(1)}\t_"
+
+        if len(match) > 1:
+            STATS["missing_total"] += 1
+            STATS["polyphonic"][monophone.group(1)] += 1
             return f"{monophone.group(1)}\t_"
 
         reading = match["MC"].iloc[0]
+
+        STATS["annotated_total"] += 1
+
         return f"{monophone.group(1)}\t{reading}"
 
     # shouldn't get here
@@ -162,6 +207,37 @@ def annotate(
         # save the text into the output folder
         output = oc_dir / f"{file.stem}.txt"
         output.open(mode="w").write(text)
+
+    # print statistics
+    typer.echo("\nStatistics:")
+    typer.echo(f"  {STATS['total']} total characters")
+    typer.echo(f"  {STATS['initially_empty']} characters initially empty")
+    typer.echo(f"  {STATS['annotated_total']} annotated characters")
+    typer.echo(f"  {STATS['missing_total']} unannotated characters")
+    typer.echo(f"  {STATS['polyphonic'].total()} polyphonic characters")
+    typer.echo(f"  Top 5:\t\t{STATS['polyphonic'].most_common(5)}")
+    typer.echo(f"  {STATS['no_reading'].total()} characters with no reading")
+    typer.echo(f"  Top 5:\t\t{STATS['no_reading'].most_common(5)}")
+
+    # write out statistics
+    polyphone_stats = Path("polyphones.txt")
+    polyphone_stats.open(mode="w").write(
+        "\n".join(
+            [
+                "\t".join([entry[0], str(entry[1])])
+                for entry in STATS["polyphonic"].most_common(100)
+            ]
+        )
+    )
+    no_reading_stats = Path("no_reading.txt")
+    no_reading_stats.open(mode="w").write(
+        "\n".join(
+            [
+                "\t".join([entry[0], str(entry[1])])
+                for entry in STATS["no_reading"].most_common(100)
+            ]
+        )
+    )
 
 
 if __name__ == "__main__":

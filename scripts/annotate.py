@@ -60,6 +60,7 @@ STATS = {
     "annotated_total": 0,
     "missing_total": 0,
     "initially_empty": 0,
+    "all_below": 0,
     "no_reading": Counter(),
     "polyphonic": Counter(),
 }
@@ -157,50 +158,39 @@ def missing_to_mc(annotation: re.Match, mc_table: pd.DataFrame) -> str:
 def multi_fanqie_to_mc(txt: str, mc_table: pd.DataFrame) -> str:
     """Convert all multi-fanqie annotations in a text to readings."""
 
-    #     find the position of the first non-blank annotation at position `j > i` for character `X`
-    #     find all blank annotations for character `X` at positions `i < k < j`
-    #     change all blank annotations to the annotation `A`
-    #     change the initial "all below" annotation to annotation `A`
+    # split the text into annotations
+    annotations = [line.split("\t") for line in txt.splitlines()]
 
-    # while there are "all below" annotations:
-    for annotation in MULTI_FANQIE.finditer(txt):
+    # get all of the "all below" multi-annotations
+    all_below = {line: anno for line, anno in enumerate(annotations) if MULTI_FANQIE.match(f"{anno[0]}\t{anno[1]}")}
 
-        # find the next such annotation in the file
-        # annotation = MULTI_FANQIE.search(txt)  # type: ignore
-        char = annotation.group('char') # type: ignore
-        initial = mc_table[mc_table["zi"] == annotation.group("initial")]  # type: ignore
-        rime = mc_table[mc_table["zi"] == annotation.group("rime")]  # type: ignore
+    for start_line, annotation in all_below.items():
+        char = annotation[0]
+        initial = mc_table[mc_table["zi"] == annotation[1][0]]
+        rime = mc_table[mc_table["zi"] == annotation[1][1]]
 
-        if initial.empty:
-            STATS["missing_total"] += 1  # type: ignore
-            STATS["no_reading"][annotation.group("initial")] += 1  # type: ignore
+        if initial.empty or rime.empty:
             continue
 
-        if rime.empty:
-            STATS["missing_total"] += 1  # type: ignore
-            STATS["no_reading"][annotation.group("rime")] += 1  # type: ignore
-            continue
+        reading = "".join(
+            (
+                initial["MCInitial"].iloc[0],
+                rime["MCfinal"].iloc[0],
+            )
+        ).replace("-", "")
 
-        reading = "".join((initial["MCInitial"].iloc[0], rime["MCfinal"].iloc[0])).replace(
-            "-", ""
-        )
+        empty_following = [line for line, anno in enumerate(annotations[start_line + 1:]) if anno[0] == char and anno[1] == "_"]
 
-        # find the position of the next non-blank annotation for this character
-        next_anno = re.compile(f"^{char}\t[^_]+?$").search(txt, pos=annotation.end())   # type: ignore
-        stop_pos = next_anno.start() if next_anno else len(txt)
+        for line in empty_following:
+            annotations[line][1] = reading
+            STATS["annotated_total"] += 1  # type: ignore
+            STATS["all_below"] += 1  # type: ignore
 
-        # find all blank annotations in between and add the reading to them
-        blank_annos = re.compile(f"^{char}\t_$") \
-                        .findall(txt, pos=annotation.start(), endpos=stop_pos) # type: ignore
-        # for anno in blank_annos:
-        #     txt[anno.start:anno.end] = f"{char}\t{reading}"
-        STATS["total"] += len(blank_annos) + 1 
-        STATS["annotated_total"] += len(blank_annos) + 1  # type: ignore
+        annotations[start_line][1] = reading
+        STATS["annotated_total"] += 1  # type: ignore
 
-        # change the initial "all below" annotation to the reading
-        txt = txt[:annotation.start()] + f"{char}\t{reading}" + txt[annotation.end():]  # type: ignore
-
-    return txt
+    # join the annotations back together
+    return "\n".join(["\t".join(anno) for anno in annotations])
 
 
 def mc_to_oc(char: re.Match, oc_table: pd.DataFrame) -> str:
@@ -242,7 +232,7 @@ def annotate(
         text = ANNOTATION.sub(filter_annotation, file.read_text())
 
         # convert "below all the same" multi-annotations
-        # text = _multi_fanqie_to_mc(text)
+        text = _multi_fanqie_to_mc(text)
 
         # convert fanqie annotations
         text = FANQIE.sub(_fanqie_to_mc, text)
@@ -263,6 +253,7 @@ def annotate(
     typer.echo(f"  {STATS['initially_empty']} characters initially empty")
     typer.echo(f"  {STATS['annotated_total']} annotated characters")
     typer.echo(f"  {STATS['missing_total']} unannotated characters")
+    typer.echo(f"  {STATS['all_below']} characters from multi-annos")
     typer.echo(f"  {STATS['polyphonic'].total()} polyphonic characters")  # type: ignore
     typer.echo(f"  Top 5:\t\t{STATS['polyphonic'].most_common(5)}")  # type: ignore
     typer.echo(f"  {STATS['no_reading'].total()} characters with no reading")  # type: ignore

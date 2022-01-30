@@ -8,6 +8,8 @@ description: |
 
 vars:
   version: 0.0.1
+  tokens_per_doc: 10
+  test_size: 0.2
 
 directories:
 - assets
@@ -90,7 +92,7 @@ commands:
   - name: convert
     help: Convert training data into spaCy's format
     script:
-      - python scripts/convert.py assets/jdsw-oc corpus/
+      - "python scripts/convert.py assets/jdsw-mc corpus/ ${vars.tokens_per_doc} ${vars.test_size}"
     deps:
       - assets/jdsw-oc
     outputs:

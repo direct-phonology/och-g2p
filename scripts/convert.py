@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 
 def convert(in_dir: Path, out_dir: Path, tokens_per_doc: int, test_size: float) -> None:
-    """Generate and save g2p training data for spaCy."""
+    """Convert g2p training data into spaCy's format for training."""
 
     # load the spaCy model and create a container for generated docs
     nlp = spacy.blank("och")

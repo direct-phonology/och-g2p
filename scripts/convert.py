@@ -17,7 +17,7 @@ def convert(in_dir: Path, out_dir: Path, tokens_per_doc: int, test_size: float) 
     docs = []
 
     # set the custom extension for phonological features
-    spacy.tokens.Token.set_extension("phon", default="")
+    spacy.tokens.Token.set_extension("phon", default=None)
 
     # iterate over the input directory
     for file in tqdm(in_dir.glob("*.txt")):
@@ -40,32 +40,27 @@ def convert(in_dir: Path, out_dir: Path, tokens_per_doc: int, test_size: float) 
 
             # set the phonological features on each token
             for t in doc:
-                t._.phon = tokens[t.i][1] if tokens[t.i][1] != "_" else ""
+                if tokens[t.i][1] != "_":
+                    t._.phon = tokens[t.i][1]
 
             # store it
             docs.append(doc)
             annotations = annotations[:-tokens_per_doc]
 
-    # split the docs into train/dev/test sets
+    # split the docs into train/dev sets
     random.shuffle(docs)
-    train_docs, _docs = train_test_split(docs, test_size=test_size)
-    dev_docs, test_docs = train_test_split(_docs, test_size=test_size)
+    train_docs, dev_docs = train_test_split(docs, test_size=test_size)
 
     # save the output in spacy's format
-    train_db = spacy.tokens.DocBin()
+    train_db = spacy.tokens.DocBin(store_user_data=True)
     for doc in train_docs:
         train_db.add(doc)
     train_db.to_disk(out_dir / "train.spacy")
 
-    dev_db = spacy.tokens.DocBin()
+    dev_db = spacy.tokens.DocBin(store_user_data=True)
     for doc in dev_docs:
         dev_db.add(doc)
     dev_db.to_disk(out_dir / "dev.spacy")
-
-    test_db = spacy.tokens.DocBin()
-    for doc in test_docs:
-        test_db.add(doc)
-    test_db.to_disk(out_dir / "test.spacy")
 
 
 if __name__ == "__main__":

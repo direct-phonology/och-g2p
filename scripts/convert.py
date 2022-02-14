@@ -49,7 +49,8 @@ def convert(in_dir: Path, out_dir: Path, tokens_per_doc: int, test_size: float) 
 
     # split the docs into train/dev sets
     random.shuffle(docs)
-    train_docs, dev_docs = train_test_split(docs, test_size=test_size)
+    train_docs, rest = train_test_split(docs, test_size=test_size)
+    dev_docs, test_docs = train_test_split(rest, test_size=test_size)
 
     # save the output in spacy's format
     train_db = spacy.tokens.DocBin(store_user_data=True)
@@ -61,6 +62,11 @@ def convert(in_dir: Path, out_dir: Path, tokens_per_doc: int, test_size: float) 
     for doc in dev_docs:
         dev_db.add(doc)
     dev_db.to_disk(out_dir / "dev.spacy")
+
+    test_db = spacy.tokens.DocBin(store_user_data=True)
+    for doc in test_docs:
+        test_db.add(doc)
+    test_db.to_disk(out_dir / "test.spacy")
 
 
 if __name__ == "__main__":

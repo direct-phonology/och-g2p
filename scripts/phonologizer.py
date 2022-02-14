@@ -7,12 +7,7 @@ from spacy.scorer import Scorer
 from spacy.tokens import Doc, Token
 from spacy.training import Example
 from spacy.vocab import Vocab
-from thinc.api import (
-    Model,
-    Optimizer,
-    SequenceCategoricalCrossentropy,
-    set_dropout_rate,
-)
+from thinc.api import Model, SequenceCategoricalCrossentropy
 from thinc.types import Floats2d, Ints1d
 
 # register custom phonemes property
@@ -44,17 +39,11 @@ class Phonologizer(TrainablePipe):
         self.vocab.strings.add(label)
         return 1
 
-    def __call__(self, doc: Doc) -> Doc:
-        """Apply the model to a Doc, set annotations, and return it."""
-        predictions = self.predict([doc])
-        self.set_annotations([doc], predictions)
-        return doc
-
     def predict(self, docs: Iterable[Doc]) -> List[Ints1d]:
         """Predict annotations for a batch of Docs, without modifying them."""
         # Handle cases where there are no tokens in any docs.
         if not any(len(doc) for doc in docs):
-            n_labels = len(self.labels)
+            n_labels = len(self._labels)
             guesses: List[Ints1d] = [self.model.ops.alloc((0, n_labels)) for _ in docs]
             return guesses
 
@@ -69,45 +58,6 @@ class Phonologizer(TrainablePipe):
             for token, tag_id in zip(list(doc), doc_tag_ids):
                 token._.phon = self.vocab.strings[self._labels[tag_id]]
 
-    def update(
-        self,
-        examples: Iterable[Example],
-        *,
-        drop: float = 0.0,
-        sgd: Optional[Optimizer] = None,
-        losses: Optional[Dict[str, float]] = None,
-    ) -> dict[str, float]:
-        """Learn from training examples and update the model."""
-        # Initialize loss tracking if not set up
-        if losses is None:
-            losses = {}
-        losses.setdefault(self.name, 0.0)
-
-        # Handle cases where there are no tokens in any docs
-        if not any(
-            len(example.predicted) if example.predicted else 0 for example in examples
-        ):
-            return losses
-
-        # Set dropout rate
-        set_dropout_rate(self.model, drop)
-
-        # Compute loss & gradient; do backprop
-        scores, backprop = self.model.begin_update(
-            [example.predicted for example in examples]
-        )
-        for score in scores:
-            if self.model.ops.xp.isnan(score.sum()):
-                raise ValueError("Score sum is NaN")
-        loss, gradient = self.get_loss(examples, scores)
-        backprop(gradient)
-        if sgd:
-            self.finish_update(sgd)
-
-        # Add loss to tracked total
-        losses[self.name] += loss
-        return losses
-
     def get_loss(
         self,
         examples: Iterable[Example],
@@ -116,7 +66,7 @@ class Phonologizer(TrainablePipe):
         """Compute the loss and gradient for a batch of examples and scores."""
         # Create loss function
         loss_func = SequenceCategoricalCrossentropy(
-            names=list(self.labels),
+            names=self._labels,
             normalize=False,
         )
 
@@ -183,7 +133,7 @@ class Phonologizer(TrainablePipe):
 
             # Make a one-hot array for correct tag for each token
             gold_array = [
-                [1.0 if tag == gold_tag else 0.0 for tag in self.labels]
+                [1.0 if tag == gold_tag else 0.0 for tag in self._labels]
                 for gold_tag in gold_tags
             ]
             truths.append(self.model.ops.asarray(gold_array, dtype="float32"))

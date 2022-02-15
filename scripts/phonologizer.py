@@ -22,20 +22,21 @@ class Phonologizer(TrainablePipe):
         self.vocab = vocab
         self.model = model
         self.name = name
-        self._labels: List[str] = []
+        cfg: Dict[str, Any] = {"labels": []}
+        self.cfg = dict(sorted(cfg.items()))
 
     @property
     def labels(self) -> Tuple[str, ...]:
         """Returns the labels currently added to the pipe."""
-        return tuple(self._labels)
+        return tuple(self.cfg["labels"])
 
     def add_label(self, label: str) -> int:
         """Add a label to the pipe. Return 0 if label already exists, else 1."""
         if not isinstance(label, str):
             raise ValueError("Phonologizer labels must be strings")
-        if label in self._labels:
+        if label in self.labels:
             return 0
-        self._labels.append(label)
+        self.cfg["labels"].append(label)
         self.vocab.strings.add(label)
         return 1
 
@@ -43,7 +44,7 @@ class Phonologizer(TrainablePipe):
         """Predict annotations for a batch of Docs, without modifying them."""
         # Handle cases where there are no tokens in any docs.
         if not any(len(doc) for doc in docs):
-            n_labels = len(self._labels)
+            n_labels = len(self.labels)
             guesses: List[Ints1d] = [self.model.ops.alloc((0, n_labels)) for _ in docs]
             return guesses
 
@@ -54,9 +55,10 @@ class Phonologizer(TrainablePipe):
 
     def set_annotations(self, docs: Iterable[Doc], tag_ids: List[Ints1d]) -> None:
         """Annotate a batch of Docs, using pre-computed scores."""
+        labels = self.labels
         for doc, doc_tag_ids in zip(docs, tag_ids):
             for token, tag_id in zip(list(doc), doc_tag_ids):
-                token._.phon = self.vocab.strings[self._labels[tag_id]]
+                token._.phon = self.vocab.strings[labels[tag_id]]
 
     def get_loss(
         self,

@@ -1,5 +1,5 @@
 from itertools import islice
-from typing import Callable, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from spacy.language import Language
 from spacy.pipeline import TrainablePipe
@@ -114,6 +114,15 @@ class Phonologizer(TrainablePipe):
         # Initialize the model
         self.model.initialize(X=doc_sample, Y=label_sample)
 
+    def score(self, examples: Iterable[Example], **kwargs) -> Dict[str, float]:
+        """Score a batch of examples."""
+        return Scorer.score_token_attr(
+            examples,
+            attr="phon",
+            getter=lambda t, attr: t._.get(attr),
+            **kwargs,
+        )
+
     def _examples_to_truth(
         self,
         examples: Iterable[Example],
@@ -131,25 +140,41 @@ class Phonologizer(TrainablePipe):
         # Get all the true labels
         truths = []
         for example in examples:
-            gold_tags = [token._.phon for token in example.reference]
+            gold_tags = self._get_aligned_phon(example)
 
             # Make a one-hot array for correct tag for each token
             gold_array = [
-                [1.0 if tag == gold_tag else 0.0 for tag in self._labels]
+                [1.0 if tag == gold_tag else 0.0 for tag in self.labels]
                 for gold_tag in gold_tags
             ]
-            truths.append(self.model.ops.asarray(gold_array, dtype="float32"))
+            doc_array = self.model.ops.asarray(gold_array, dtype="float32")
+            truths.append(doc_array)  
 
         return truths
 
-    def score(self, examples: Iterable[Example], **kwargs) -> Dict[str, float]:
-        """Score a batch of examples."""
-        return Scorer.score_token_attr(
-            examples,
-            attr="phon",
-            getter=lambda t, attr: t._.get(attr),
-            **kwargs,
+    def _get_aligned_phon(self, example: Example) -> List[Optional[str]]:
+        """Get the aligned phonology data for a training Example."""
+        align = example.alignment.x2y
+        gold_ids = self.model.ops.asarray(
+            [
+                self.vocab.strings[tok._.phon] if tok._.phon else 0     # type: ignore
+                for tok in example.reference
+            ],
+            dtype="uint64",
         )
+        output = [None] * len(example.predicted)
+
+        for token in example.predicted:
+            if not token.is_alpha:
+                output[token.i] = None
+            else:
+                id = gold_ids[align[token.i].dataXd].ravel()    # type: ignore
+                if len(id) == 0 or id[0] == 0:
+                    output[token.i] = None
+                else:
+                    output[token.i] = id[0]
+
+        return [self.vocab.strings[id] if id else id for id in output]  # type: ignore
 
 
 @Language.factory(

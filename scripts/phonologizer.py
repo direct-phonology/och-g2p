@@ -107,9 +107,11 @@ class Phonologizer(TrainablePipe):
         label_sample = []
         for example in islice(get_examples(), 10):
             doc_sample.append(example.reference)
-            doc_truths = self._examples_to_truth([example])
-            if doc_truths:
-                label_sample.append(self.model.ops.asarray(doc_truths, dtype="float32"))
+            labeled = self._examples_to_truth([example])
+            if labeled:
+                label_sample.append(labeled[0])
+            else:
+                label_sample.append(None)
 
         # Initialize the model
         self.model.initialize(X=doc_sample, Y=label_sample)

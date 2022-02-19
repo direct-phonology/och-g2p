@@ -102,7 +102,7 @@ commands:
   - name: train
     help: Train a grapheme-to-phoneme conversion model
     script:
-      - python -m spacy train configs/config.cfg -c ./scripts/phonologizer.py
+      - python -m spacy train configs/config.cfg -c ./scripts/phonologizer.py --output training/
     outputs:
       - training/model-best
 

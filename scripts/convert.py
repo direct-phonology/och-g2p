@@ -38,10 +38,10 @@ def convert(in_dir: Path, out_dir: Path, tokens_per_doc: int, test_size: float) 
                 spaces=[False] * tokens_per_doc,
             )
 
-            # set the phonological features on each token
+            # set the phonological features on each token; _ is used for
+            # missing values
             for t in doc:
-                if tokens[t.i][1] != "_":
-                    t._.phon = tokens[t.i][1]
+                t._.phon = tokens[t.i][1]
 
             # store it
             docs.append(doc)

@@ -154,4 +154,5 @@ cython_debug/
 # spaCy local files
 assets/
 corpus/
+output/
 project.lock

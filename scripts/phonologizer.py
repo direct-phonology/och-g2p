@@ -5,7 +5,8 @@ from spacy.language import Language
 from spacy.pipeline import TrainablePipe
 from spacy.scorer import Scorer
 from spacy.tokens import Doc, Token
-from spacy.training import Example
+from spacy.training import Example, validate_get_examples
+from spacy.util import registry, check_lexeme_norms
 from spacy.vocab import Vocab
 from thinc.api import Model, SequenceCategoricalCrossentropy
 from thinc.types import Floats2d, Ints1d
@@ -14,20 +15,43 @@ from thinc.types import Floats2d, Ints1d
 Token.set_extension("phon", default=None)
 
 
+def phon_score(examples: Iterable[Example], **kwargs) -> Dict[str, Any]:
+    return Scorer.score_token_attr(
+        examples,
+        attr="phon",
+        getter=lambda t, attr: t._.get(attr),
+        missing_values=set("_"),
+        **kwargs,
+    )
+
+
+@registry.scorers("phon_scorer.v1")
+def make_phon_scorer():
+    return phon_score
+
+
 class Phonologizer(TrainablePipe):
     """Pipeline component for grapheme-to-phoneme conversion."""
 
-    def __init__(self, vocab: Vocab, model: Model, name: str = "phon") -> None:
+    def __init__(
+        self,
+        vocab: Vocab,
+        model: Model,
+        name: str = "phon",
+        *,
+        scorer=phon_score,
+    ) -> None:
         """Initialize a grapheme-to-phoneme converter."""
         self.vocab = vocab
         self.model = model
         self.name = name
         cfg: Dict[str, Any] = {"labels": []}
         self.cfg = dict(sorted(cfg.items()))
+        self.scorer = scorer
 
     @property
     def labels(self) -> Tuple[str, ...]:
-        """Returns the labels currently added to the pipe."""
+        """Return the labels currently added to the pipe."""
         return tuple(self.cfg["labels"])
 
     def add_label(self, label: str) -> int:
@@ -40,25 +64,28 @@ class Phonologizer(TrainablePipe):
         self.vocab.strings.add(label)
         return 1
 
-    def predict(self, docs: Iterable[Doc]) -> List[Ints1d]:
+    def predict(self, docs: List[Doc]) -> List[Ints1d]:
         """Predict annotations for a batch of Docs, without modifying them."""
         # Handle cases where there are no tokens in any docs.
         if not any(len(doc) for doc in docs):
             n_labels = len(self.labels)
-            guesses: List[Ints1d] = [self.model.ops.alloc((0, n_labels)) for _ in docs]
+            guesses = [self.model.ops.alloc1i(n_labels) for _ in docs]
             return guesses
 
         # Get the scores and pick the highest-scoring guess for each token
         scores = self.model.predict(docs)
+        assert len(scores) == len(docs), (len(scores), len(docs))
         guesses = [score.argmax(axis=1) for score in scores]
+        assert len(guesses) == len(docs)
         return guesses
 
     def set_annotations(self, docs: Iterable[Doc], tag_ids: List[Ints1d]) -> None:
-        """Annotate a batch of Docs, using pre-computed scores."""
+        """Annotate a batch of Docs, using pre-computed IDs."""
         labels = self.labels
         for doc, doc_tag_ids in zip(docs, tag_ids):
             for token, tag_id in zip(list(doc), doc_tag_ids):
-                token._.phon = self.vocab.strings[labels[tag_id]]
+                token._.phon = labels[tag_id]
+        return docs
 
     def get_loss(
         self,
@@ -68,7 +95,7 @@ class Phonologizer(TrainablePipe):
         """Compute the loss and gradient for a batch of examples and scores."""
         # Create loss function
         loss_func = SequenceCategoricalCrossentropy(
-            names=self._labels,
+            names=list(self.labels),
             normalize=False,
         )
 
@@ -84,46 +111,36 @@ class Phonologizer(TrainablePipe):
         get_examples: Callable[[], Iterable[Example]],
         *,
         nlp: Language = None,
-        labels: Optional[List[str]] = None,
     ):
         """Initialize the pipe for training using a set of examples."""
-        # Add preset labels if requested
-        if labels:
-            for label in labels:
-                self.add_label(label)
+        validate_get_examples(get_examples, "Phonologizer.initialize")
+        check_lexeme_norms(self.vocab, "phonologizer")
 
-        # Otherwise read all unique tags from the examples and add them
-        else:
-            tags = set()
-            for example in get_examples():
-                for token in example.reference:
-                    if token._.phon:
-                        tags.add(token._.phon)
-            for tag in sorted(tags):
-                self.add_label(tag)
+        # Read all unique tags from the examples and add them
+        tags = set()
+        for example in get_examples():
+            for token in example.reference:
+                if token._.phon:
+                    tags.add(token._.phon)
+        for tag in sorted(tags):
+            self.add_label(tag)
 
         # Use the first 10 examples to sample Docs and labels
         doc_sample = []
         label_sample = []
+        n_labels = len(self.labels)
         for example in islice(get_examples(), 10):
             doc_sample.append(example.reference)
             labeled = self._examples_to_truth([example])
             if labeled:
-                label_sample.append(labeled[0])
+                label_sample += labeled
             else:
-                label_sample.append(None)
+                label_sample.append(
+                    self.model.ops.alloc2f(len(example.reference), n_labels)
+                )
 
         # Initialize the model
         self.model.initialize(X=doc_sample, Y=label_sample)
-
-    def score(self, examples: Iterable[Example], **kwargs) -> Dict[str, float]:
-        """Score a batch of examples."""
-        return Scorer.score_token_attr(
-            examples,
-            attr="phon",
-            getter=lambda t, attr: t._.get(attr),
-            **kwargs,
-        )
 
     def _examples_to_truth(
         self,
@@ -149,17 +166,16 @@ class Phonologizer(TrainablePipe):
                 [1.0 if tag == gold_tag else 0.0 for tag in self.labels]
                 for gold_tag in gold_tags
             ]
-            doc_array = self.model.ops.asarray(gold_array, dtype="float32")
-            truths.append(doc_array)  
+            truths.append(self.model.ops.asarray2f(gold_array))  # type: ignore
 
         return truths
 
     def _get_aligned_phon(self, example: Example) -> List[Optional[str]]:
         """Get the aligned phonology data for a training Example."""
         align = example.alignment.x2y
-        gold_ids = self.model.ops.asarray(
+        gold_ids = self.model.ops.asarray2f(
             [
-                self.vocab.strings[tok._.phon] if tok._.phon else 0     # type: ignore
+                self.vocab.strings[tok._.phon] if tok._.phon else 0  # type: ignore
                 for tok in example.reference
             ],
             dtype="uint64",
@@ -170,7 +186,7 @@ class Phonologizer(TrainablePipe):
             if not token.is_alpha:
                 output[token.i] = None
             else:
-                id = gold_ids[align[token.i].dataXd].ravel()    # type: ignore
+                id = gold_ids[align[token.i].dataXd].ravel()  # type: ignore
                 if len(id) == 0 or id[0] == 0:
                     output[token.i] = None
                 else:
@@ -182,12 +198,14 @@ class Phonologizer(TrainablePipe):
 @Language.factory(
     "phonologizer",
     assigns=["token._.phon"],
+    default_config={"scorer": {"@scorers": "phon_scorer.v1"}},
     default_score_weights={"phon_acc": 1.0},
 )
 def make_phonologizer(
     nlp: Language,
     model: Model[List[Doc], List[Floats2d]],
     name: str,
+    scorer: Optional[Callable],
 ) -> Phonologizer:
     """Construct a Phonologizer component."""
-    return Phonologizer(nlp.vocab, model, name=name)
+    return Phonologizer(nlp.vocab, model, name=name, scorer=scorer)

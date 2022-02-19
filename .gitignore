@@ -155,4 +155,5 @@ cython_debug/
 assets/
 corpus/
 output/
+training/
 project.lock

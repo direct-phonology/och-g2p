@@ -229,7 +229,7 @@ def annotate(
     for file in tqdm(sorted(list(in_dir.glob("*.txt")))):
 
         # read the file and strip annotations we can't convert
-        text = ANNOTATION.sub(filter_annotation, file.read_text())
+        text = ANNOTATION.sub(filter_annotation, file.read_text(encoding="utf-8"))
 
         # convert "below all the same" multi-annotations
         text = _multi_fanqie_to_mc(text)
@@ -245,7 +245,7 @@ def annotate(
 
         # save the text into the output folder
         output = mc_dir / f"{file.stem}.txt"
-        output.open(mode="w").write(text)
+        output.open(mode="w", encoding="utf-8").write(text)
 
     # print statistics
     typer.echo("\nStatistics:")
@@ -261,7 +261,7 @@ def annotate(
 
     # write out statistics
     polyphone_stats = Path("polyphones.txt")
-    polyphone_stats.open(mode="w").write(
+    polyphone_stats.open(mode="w", encoding="utf-8").write(
         "\n".join(
             [
                 "\t".join([entry[0], str(entry[1])])
@@ -270,7 +270,7 @@ def annotate(
         )
     )
     no_reading_stats = Path("no_reading.txt")
-    no_reading_stats.open(mode="w").write(
+    no_reading_stats.open(mode="w", encoding="utf-8").write(
         "\n".join(
             [
                 "\t".join([entry[0], str(entry[1])])

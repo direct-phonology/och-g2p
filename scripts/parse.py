@@ -120,14 +120,14 @@ def parse(in_dir: Path, out_dir: Path, unicode_table: Path) -> None:
             continue
 
         # read the file and clean it
-        text = clean_text(file.read_text(), to_unicode)
+        text = clean_text(file.read_text(encoding="utf-8"), to_unicode)
 
         # reformat conll-style
         text = split_text(text)
 
         # save the text into the output folder
         output = out_dir / f"{file.stem}.txt"
-        output.open(mode="w").write(text)
+        output.open(mode="w", encoding="utf-8").write(text)
 
 
 if __name__ == "__main__":

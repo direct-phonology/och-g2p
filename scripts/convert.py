@@ -21,7 +21,7 @@ def convert(in_dir: Path, out_dir: Path, tokens_per_doc: int, test_size: float) 
 
     # iterate over the input directory
     for file in tqdm(in_dir.glob("*.txt")):
-        annotations = [line.split("\t") for line in file.read_text().splitlines()]
+        annotations = [line.split("\t") for line in file.read_text(encoding="utf-8").splitlines()]
 
         # create a new doc every tokens_per_doc characters
         while len(annotations) >= tokens_per_doc:

@@ -80,7 +80,7 @@ class Phonologizer(TrainablePipe):
         # Pick the highest-scoring guess for each token
         guesses = []
         for doc_scores in scores:
-            doc_guesses = score.argmax(axis=1)
+            doc_guesses = doc_scores.argmax(axis=1)
             if not isinstance(doc_guesses, numpy.ndarray):
                 doc_guesses = doc_guesses.get()
             guesses.append(doc_guesses)
@@ -95,7 +95,6 @@ class Phonologizer(TrainablePipe):
                 doc_tag_ids = doc_tag_ids.get()
             for token, tag_id in zip(list(doc), doc_tag_ids):
                 token._.phon = labels[tag_id]
-        return docs
 
     def get_loss(
         self,

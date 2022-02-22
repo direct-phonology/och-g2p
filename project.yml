@@ -10,6 +10,7 @@ vars:
   version: 0.0.1
   tokens_per_doc: 10
   test_size: 0.2
+  gpu: 0
 
 directories:
 - assets
@@ -102,7 +103,7 @@ commands:
   - name: train
     help: Train a grapheme-to-phoneme conversion model
     script:
-      - python -m spacy train configs/config.cfg -c ./scripts/phonologizer.py --output training/
+      - python -m spacy train configs/config.cfg -c ./scripts/phonologizer.py --output training/ --gpu-id ${vars.gpu}
     outputs:
       - training/model-best
 

@@ -1,6 +1,7 @@
 from itertools import islice
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
+import numpy
 from spacy.language import Language
 from spacy.pipeline import TrainablePipe
 from spacy.scorer import Scorer
@@ -72,10 +73,17 @@ class Phonologizer(TrainablePipe):
             guesses = [self.model.ops.alloc1i(n_labels) for _ in docs]
             return guesses
 
-        # Get the scores and pick the highest-scoring guess for each token
+        # Get the scores predicted by the model
         scores = self.model.predict(docs)
         assert len(scores) == len(docs), (len(scores), len(docs))
-        guesses = [score.argmax(axis=1) for score in scores]
+
+        # Pick the highest-scoring guess for each token
+        guesses = []
+        for doc_scores in scores:
+            doc_guesses = score.argmax(axis=1)
+            if not isinstance(doc_guesses, numpy.ndarray):
+                doc_guesses = doc_guesses.get()
+            guesses.append(doc_guesses)
         assert len(guesses) == len(docs)
         return guesses
 
@@ -83,6 +91,8 @@ class Phonologizer(TrainablePipe):
         """Annotate a batch of Docs, using pre-computed IDs."""
         labels = self.labels
         for doc, doc_tag_ids in zip(docs, tag_ids):
+            if hasattr(doc_tag_ids, "get"):
+                doc_tag_ids = doc_tag_ids.get()
             for token, tag_id in zip(list(doc), doc_tag_ids):
                 token._.phon = labels[tag_id]
         return docs

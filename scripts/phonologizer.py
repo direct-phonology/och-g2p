@@ -113,7 +113,7 @@ class Phonologizer(TrainablePipe):
         gradient, loss = loss_func(scores, truths)  # type: ignore
         if self.model.ops.xp.isnan(loss):
             raise ValueError(f"{self.name } loss is NaN")
-        return loss, gradient
+        return float(loss), gradient
 
     def initialize(
         self,

@@ -181,27 +181,17 @@ class Phonologizer(TrainablePipe):
 
     def _get_aligned_phon(self, example: Example) -> List[Optional[str]]:
         """Get the aligned phonology data for a training Example."""
-        align = example.alignment.x2y
-        gold_ids = self.model.ops.asarray2f(
-            [
-                self.vocab.strings[tok._.phon] if tok._.phon else 0  # type: ignore
-                for tok in example.reference
-            ],
-            dtype="uint64",
-        )
+        alignment = example.alignment.x2y
+        gold_phon = [token._.phon for token in example.reference]
         output = [None] * len(example.predicted)
 
         for token in example.predicted:
             if not token.is_alpha:
                 output[token.i] = None
             else:
-                id = gold_ids[align[token.i].dataXd].ravel()  # type: ignore
-                if len(id) == 0 or id[0] == 0:
-                    output[token.i] = None
-                else:
-                    output[token.i] = id[0]
+                output[token.i] = gold_phon[alignment[token.i].dataXd[0][0]]
 
-        return [self.vocab.strings[id] if id else id for id in output]  # type: ignore
+        return output
 
 
 @Language.factory(

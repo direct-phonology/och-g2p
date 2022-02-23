@@ -8,6 +8,8 @@ command:
   - scripts/sweep.py
   - configs/config.cfg
   - training
+  - --code
+  - scripts/phonologizer.py
 parameters:
   components.tok2vec.model.width:
     values:

@@ -24,7 +24,7 @@ parameters:
       - 4
       - 6
       - 8
-  components.tok2vec.embed_size:
+  components.tok2vec.model.embed_size:
     values:
       - 2000
       - 6000

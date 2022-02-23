@@ -10,6 +10,9 @@ command:
   - training
   - --code
   - scripts/phonologizer.py
+early_terminate:
+  type: hyperband
+  min_iter: 3
 parameters:
   components.tok2vec.model.width:
     values:

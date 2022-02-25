@@ -12,7 +12,7 @@ vars:
   version: 0.0.1
   tokens_per_doc: 10
   test_size: 0.2
-  gpu: 0
+  gpu: -1
 
 directories:
 - assets
@@ -129,3 +129,10 @@ commands:
       - training/model-best
     outputs_no_cache:
       - packages/och_${vars.pipeline_name}-${vars.version}/dist/och_${vars.pipeline_name}-${vars.version}.tar.gz
+
+  - name: visualize
+    help: Create an interactive visualization of the model
+    script:
+      - streamlit run scripts/visualize.py -- training/model-best --code ./scripts/phonologizer.py
+    deps:
+      - training/model-best

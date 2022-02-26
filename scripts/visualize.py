@@ -10,17 +10,27 @@ from spacy_och.examples import sentences
 
 
 def main(model: Path, code: Optional[Path] = None) -> None:
+    spacy.cli._util.import_code(code) # type: ignore
+    nlp = spacy.load(model)
+    
+    st.set_page_config(layout="wide")
     st.title("Grapheme-to-phoneme testing")
 
-    spacy.cli._util.import_code(code)
-
-    nlp = spacy.load(model)
+    st.header("Examples")
     docs = [nlp(sent) for sent in sentences]
-    data = [[str(token._.phon) for token in doc] for doc in docs]
-    df = pd.DataFrame(data)
+    for doc in docs:
+        data = (
+            [token.text for token in doc],
+            [token._.phon for token in doc],
+        )
+        st.table(pd.DataFrame(data, index=("char", "read")))
 
-    st.dataframe(df)
+    st.header("Live test")
+    st.text("TODO")
 
 
 if __name__ == "__main__":
-    typer.run(main)
+    try:
+        typer.run(main)
+    except SystemExit:
+        pass

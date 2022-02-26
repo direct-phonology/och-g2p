@@ -17,7 +17,8 @@ def convert(in_dir: Path, out_dir: Path, tokens_per_doc: int, test_size: float) 
     docs = []
 
     # set the custom extension for phonological features
-    spacy.tokens.Token.set_extension("phon", default=None)
+    if not spacy.tokens.Token.has_extension("phon"):
+        spacy.tokens.Token.set_extension("phon", default=None)
 
     # iterate over the input directory
     for file in tqdm(in_dir.glob("*.txt")):

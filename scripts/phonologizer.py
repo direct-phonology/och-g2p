@@ -13,7 +13,8 @@ from thinc.api import Model, SequenceCategoricalCrossentropy
 from thinc.types import Floats2d, Ints1d
 
 # register custom phonemes property
-Token.set_extension("phon", default=None)
+if not Token.has_extension("phon"):
+    Token.set_extension("phon", default=None)
 
 
 def phon_score(examples: Iterable[Example], **kwargs) -> Dict[str, Any]:
